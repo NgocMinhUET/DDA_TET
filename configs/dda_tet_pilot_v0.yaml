@@ -1,0 +1,77 @@
+experiment:
+  name: dda_tet_pilot_v0
+  seed: 42
+  output_dir: runs/dda_tet_pilot_v0
+
+data:
+  # Expected cache format for each sample:
+  #   x_c: compressed reconstruction tensor/image in [0,1], shape [3,H,W]
+  #   x_d: optional teacher enhanced image in [0,1], shape [3,H,W]
+  #   r_d: teacher residual x_d - x_c, shape [3,H,W]
+  #   raw_stats: [QP, bitrate, mean_rgb, std_rgb, edge_density, entropy, objectness_ratio]
+  cache_root: ./cache/dda_tet_pilot
+  train_index: train.jsonl
+  val_index: val.jsonl
+  image_size: null
+  num_workers: 4
+
+codec:
+  primary: VTM
+  version_image: '20.0'
+  config: AI
+  qp_list: [27, 37, 47]
+  pixel_range: '[0,1]'
+
+student:
+  name: Core_DDA_TET
+  input_dim: 7
+  num_basis: 8
+  tile_size: 32
+  in_channels: 3
+  residual_scale: 0.01568627450980392  # 4/255
+  alpha_scale: 1.0
+  clamp_output_train: false
+  clamp_output_eval: true
+  alpha_mlp:
+    hidden_dims: [32, 32]
+    activation: relu
+    output_activation: tanh
+
+stats_normalization:
+  mode: hybrid
+  qp_min: 22.0
+  qp_max: 47.0
+  bitrate_mode: log_divisor
+  bitrate_log_divisor: 15.0
+  entropy_max: 8.0
+  clamp_min: -3.0
+  clamp_max: 3.0
+
+loss:
+  lambda_distill: 1.0
+  lambda_fpn: 0.5
+  lambda_task: 0.0        # keep 0 in first debug stage
+  lambda_sparse: 0.01
+  lambda_orth: 0.001
+  fpn:
+    enabled: false        # enable after core distillation is stable
+    layers: [P3, P4, P5]
+    weights: {P3: 0.5, P4: 0.3, P5: 0.2}
+    normalization: layerwise_channel_mean_std
+    distance: l1
+
+training:
+  device: cuda
+  epochs: 5
+  batch_size: 4
+  optimizer: AdamW
+  learning_rate: 0.0001
+  weight_decay: 0.00001
+  gradient_clip_norm: 1.0
+  mixed_precision: true
+  log_interval: 10
+  save_interval: 1
+
+evaluation:
+  metrics: [mAP, BD_rate_mAP, runtime_overhead, params, memory]
+  baselines: [VVC_anchor, Fixed_TET, Adaptive_TET_no_diffusion, Adaptive_TET_FPN, Full_DDA_TET]
